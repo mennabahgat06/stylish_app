@@ -1,8 +1,64 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/app_colors.dart';
+import '../../../core/utils/app_snack_bar.dart';
+import '../../../core/widgets/back_app_bar.dart';
+import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/loading_view.dart';
+import '../data/models/order_model.dart';
+import '../data/services/order_service.dart';
+import 'widgets/orders_list.dart';
 
-class MyOrdersView extends StatelessWidget {
+/// GET orders, split into Active / Completed / Cancelled tabs.
+/// Active orders can be cancelled (POST orders/cancel/{id}).
+class MyOrdersView extends StatefulWidget {
   const MyOrdersView({super.key});
+
+  @override
+  State<MyOrdersView> createState() => _MyOrdersViewState();
+}
+
+class _MyOrdersViewState extends State<MyOrdersView> {
+  final OrderService _orderService = OrderService();
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final orders = await _orderService.getOrders();
+      if (mounted) setState(() => _orders = orders);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _cancel(OrderModel order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const ConfirmDialog(title: 'Cancel this order?', confirmText: 'Cancel order'),
+    );
+    if (confirmed != true) return;
+    try {
+      await _orderService.cancelOrder(order.id);
+      if (mounted) AppSnackBar.show(context, 'Order cancelled');
+      _load();
+    } catch (e) {
+      if (mounted) AppSnackBar.show(context, e.toString(), isError: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,89 +66,40 @@ class MyOrdersView extends StatelessWidget {
       length: 3,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text('My Orders', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-          bottom: const TabBar(
+        appBar: const BackAppBar(
+          title: 'My Orders',
+          bottom: TabBar(
             indicatorColor: AppColors.primaryPink,
             labelColor: AppColors.primaryPink,
             unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(text: 'Active'),
-              Tab(text: 'Completed'),
-              Tab(text: 'Cancelled'),
-            ],
+            tabs: [Tab(text: 'Active'), Tab(text: 'Completed'), Tab(text: 'Cancelled')],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildEmptyState(),
-            _buildOrdersList('Order delivered'),
-            _buildOrdersList('Order Canceled'),
-          ],
-        ),
+        body: _buildBody(),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.receipt_long_outlined, size: 80, color: AppColors.softPink),
-          SizedBox(height: 16),
-          Text(
-            'You don\'t have any\nactive orders at this time',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.primaryPink, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildBody() {
+    if (_isLoading) return const LoadingView();
+    if (_error != null) return ErrorView(message: _error!, onRetry: _load);
 
-  Widget _buildOrdersList(String status) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 2,
-      itemBuilder: (context, index) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.inputBackground,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.checkroom),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Mens Starry', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(status, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                  ],
-                ),
-              ),
-              const Text('\$ 50', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ],
-          ),
-        );
-      },
+    return TabBarView(
+      children: [
+        OrdersList(
+          orders: _orders.where((o) => o.isActive).toList(),
+          emptyMessage: "You don't have any\nactive orders at this time",
+          onCancel: _cancel,
+        ),
+        OrdersList(
+          orders: _orders.where((o) => o.isCompleted).toList(),
+          emptyMessage: "You don't have any\ncompleted orders yet",
+        ),
+        OrdersList(
+          orders: _orders.where((o) => o.isCancelled).toList(),
+          emptyMessage: "You don't have any\ncancelled orders",
+        ),
+      ],
     );
   }
 }

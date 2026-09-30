@@ -1,77 +1,78 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_colors.dart';
+import '../../../core/utils/app_snack_bar.dart';
+import '../../../core/widgets/back_app_bar.dart';
+import '../../../core/widgets/empty_view.dart';
+import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/loading_view.dart';
+import '../../products/data/models/product_model.dart';
+import '../../products/presentation/widgets/favorite_button.dart';
+import '../../products/presentation/widgets/product_grid.dart';
+import '../data/services/favorite_service.dart';
 
-class FavoritesView extends StatelessWidget {
+/// Favorite products (added with POST add_to_favorite, list kept on the device).
+class FavoritesView extends StatefulWidget {
   const FavoritesView({super.key});
+
+  @override
+  State<FavoritesView> createState() => _FavoritesViewState();
+}
+
+class _FavoritesViewState extends State<FavoritesView> {
+  final FavoriteService _favoriteService = FavoriteService();
+  List<ProductModel> _favorites = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final favorites = await _favoriteService.getFavorites();
+      if (mounted) setState(() => _favorites = favorites);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _remove(ProductModel product) async {
+    try {
+      await _favoriteService.remove(product.id);
+      if (mounted) setState(() => _favorites.remove(product));
+    } catch (e) {
+      if (mounted) AppSnackBar.show(context, e.toString(), isError: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('My Favorites', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-      ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.72,
-        ),
-        itemCount: 4,
-        itemBuilder: (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Container(
-                        color: Colors.grey.shade100,
-                        child: const Center(child: Icon(Icons.checkroom, size: 60)),
-                      ),
-                      const Positioned(
-                        top: 8,
-                        right: 8,
-                        child: CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.favorite, color: AppColors.primaryPink, size: 16),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Mens Starry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('100% Cotton Fabric', style: TextStyle(color: Colors.grey, fontSize: 10)),
-                      SizedBox(height: 4),
-                      Text('₹399', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    ],
-                  ),
-                )
-              ],
-            ),
-          );
-        },
-      ),
+      appBar: const BackAppBar(title: 'My Favorites'),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) return const LoadingView();
+    if (_error != null) return ErrorView(message: _error!, onRetry: _load);
+    if (_favorites.isEmpty) {
+      return const EmptyView(icon: Icons.favorite_border, message: 'No favorites yet');
+    }
+    return ProductGrid(
+      products: _favorites,
+      onReturn: _load, // the user may un-favorite from the details screen
+      topRightBuilder: (product) =>
+          FavoriteButton(isFavorite: true, onTap: () => _remove(product)),
     );
   }
 }

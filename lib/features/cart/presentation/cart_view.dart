@@ -1,91 +1,102 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_colors.dart';
+import '../../../core/utils/app_snack_bar.dart';
+import '../../../core/widgets/back_app_bar.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/empty_view.dart';
+import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/loading_view.dart';
+import '../data/models/cart_model.dart';
+import '../data/services/cart_service.dart';
 import 'checkout_view.dart';
+import 'widgets/cart_item_tile.dart';
+import 'widgets/cart_summary.dart';
 
-class CartView extends StatelessWidget {
+/// Local cart (saved on the device). Checkout -> POST place_order.
+class CartView extends StatefulWidget {
   const CartView({super.key});
+
+  @override
+  State<CartView> createState() => _CartViewState();
+}
+
+class _CartViewState extends State<CartView> {
+  final CartService _cartService = CartService();
+  CartModel? _cart;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final cart = await _cartService.getCart();
+      if (mounted) setState(() => _cart = cart);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _remove(int cartItemId) async {
+    try {
+      await _cartService.removeItem(cartItemId);
+      _load();
+    } catch (e) {
+      if (mounted) AppSnackBar.show(context, e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _goToCheckout() async {
+    final ordered = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => CheckoutView(cart: _cart!)),
+    );
+    if (ordered == true && mounted) Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Cart', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Shopping List', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            _buildCartItem("Women's Casual Wear", '\$ 34.00'),
-            _buildCartItem("Men's Jacket", '\$ 45.00'),
-            const Spacer(),
-            const Divider(),
-            _buildPriceRow('Subtotal', '\$ 79.00'),
-            _buildPriceRow('Tax and Fees', '\$ 3.00'),
-            _buildPriceRow('Delivery Fee', '\$ 2.00'),
-            const Divider(),
-            _buildPriceRow('Order Total', '\$ 84.00', isTotal: true),
-            const SizedBox(height: 20),
-            CustomPrimaryButton(
-              text: 'Checkout',
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckoutView())),
-            ),
-          ],
-        ),
-      ),
+      appBar: const BackAppBar(title: 'Cart'),
+      body: _buildBody(),
     );
   }
 
-  Widget _buildCartItem(String name, String price) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.inputBackground,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.checkroom),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(price, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 12)),
-              ],
-            ),
-          ),
-          const Text('1', style: TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
+  Widget _buildBody() {
+    if (_isLoading) return const LoadingView();
+    if (_error != null) return ErrorView(message: _error!, onRetry: _load);
+    final cart = _cart!;
+    if (cart.isEmpty) {
+      return const EmptyView(icon: Icons.shopping_cart_outlined, message: 'Your cart is empty');
+    }
 
-  Widget _buildPriceRow(String label, String amount, {bool isTotal = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, fontSize: isTotal ? 16 : 13)),
-          Text(amount, style: TextStyle(fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, fontSize: isTotal ? 16 : 13, color: isTotal ? AppColors.primaryPink : Colors.black)),
+          const Text('Shopping List', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView(
+              children: cart.items
+                  .map((item) => CartItemTile(item: item, onRemove: () => _remove(item.id)))
+                  .toList(),
+            ),
+          ),
+          CartSummary(cart: cart),
+          const SizedBox(height: 20),
+          CustomPrimaryButton(text: 'Checkout', onPressed: _goToCheckout),
         ],
       ),
     );

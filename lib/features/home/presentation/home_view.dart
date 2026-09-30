@@ -1,215 +1,125 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/app_colors.dart';
+import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/loading_view.dart';
+import '../../../core/widgets/stylish_logo.dart';
 import '../../cart/presentation/cart_view.dart';
-import '../../products/presentation/product_details_view.dart';
+import '../../categories/data/models/category_model.dart';
+import '../../categories/presentation/widgets/categories_list.dart';
+import '../../products/data/models/product_model.dart';
+import '../../products/data/services/product_service.dart';
+import '../../products/presentation/widgets/product_grid.dart';
 import '../../search/presentation/search_view.dart';
+import '../data/models/slider_model.dart';
+import '../data/services/home_service.dart';
+import 'widgets/search_bar_button.dart';
+import 'widgets/section_title.dart';
+import 'widgets/slider_banner.dart';
 
-class HomeView extends StatelessWidget {
+/// Tab 1: GET sliders, categories, best_seller_products, top_rated_products.
+class HomeView extends StatefulWidget {
   const HomeView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final categories = ['Beauty', 'Fashion', 'Kids', 'Mens', 'Womens'];
+  State<HomeView> createState() => _HomeViewState();
+}
 
+class _HomeViewState extends State<HomeView> {
+  final HomeService _homeService = HomeService();
+  final ProductService _productService = ProductService();
+
+  List<SliderModel> _sliders = [];
+  List<CategoryModel> _categories = [];
+  List<ProductModel> _bestSellers = [];
+  List<ProductModel> _topRated = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([
+        _homeService.getSliders(),
+        _homeService.getCategories(),
+        _productService.getBestSellers(),
+        _productService.getTopRated(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _sliders = results[0] as List<SliderModel>;
+        _categories = results[1] as List<CategoryModel>;
+        _bestSellers = results[2] as List<ProductModel>;
+        _topRated = results[3] as List<ProductModel>;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _open(Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
-        leading: const Icon(Icons.menu, color: Colors.black),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.all_inclusive, color: AppColors.primaryPink),
-            SizedBox(width: 6),
-            Text('Stylish',
-                style: TextStyle(
-                    color: AppColors.primaryPink,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18)),
-          ],
-        ),
+        centerTitle: true,
+        title: const StylishLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black),
-            onPressed: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const CartView())),
-          )
+            onPressed: () => _open(const CartView()),
+          ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 10),
-            // Search Bar
-            GestureDetector(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SearchView())),
-              child: Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.search, color: AppColors.textMuted),
-                    SizedBox(width: 8),
-                    Text('Search any Product..',
-                        style: TextStyle(
-                            color: AppColors.textMuted, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text('All Featured',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
-            // Horizontal Categories
-            SizedBox(
-              height: 80,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 14),
-                itemBuilder: (context, index) {
-                  return Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.pink.shade50,
-                        child: const Icon(Icons.checkroom,
-                            color: AppColors.primaryPink),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(categories[index],
-                          style: const TextStyle(fontSize: 11)),
-                    ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Banner
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFA7189),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('50-40% OFF',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4),
-                        Text('Now in [product]\nAll colours',
-                            style:
-                                TextStyle(color: Colors.white70, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.shopping_bag, size: 50, color: Colors.white),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Recommended',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
-            // Product Cards Grid
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                return _buildProductCard(context);
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+      body: _buildBody(),
     );
   }
 
-  Widget _buildProductCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const ProductDetailsView())),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(10)),
-                ),
-                child: const Center(
-                  child: Icon(Icons.checkroom, size: 60, color: Colors.black87),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Mens Starry',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const Text('Mens Starry Sky Shirt',
-                      style: TextStyle(color: Colors.grey, fontSize: 10),
-                      maxLines: 1),
-                  const SizedBox(height: 4),
-                  const Text('₹399',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  Row(
-                    children: const [
-                      Icon(Icons.star, color: AppColors.starYellow, size: 12),
-                      Icon(Icons.star, color: AppColors.starYellow, size: 12),
-                      Icon(Icons.star, color: AppColors.starYellow, size: 12),
-                      Icon(Icons.star, color: AppColors.starYellow, size: 12),
-                      SizedBox(width: 4),
-                      Text('1,52,344',
-                          style: TextStyle(color: Colors.grey, fontSize: 9)),
-                    ],
-                  ),
-                ],
-              ),
-            )
-          ],
-        ),
+  Widget _buildBody() {
+    if (_isLoading) return const LoadingView();
+    if (_error != null) return ErrorView(message: _error!, onRetry: _load);
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        children: [
+          SearchBarButton(onTap: () => _open(const SearchView())),
+          const SizedBox(height: 18),
+          const SectionTitle(title: 'All Featured'),
+          const SizedBox(height: 12),
+          CategoriesList(
+            categories: _categories,
+            onTap: (category) => _open(SearchView(category: category)),
+          ),
+          const SizedBox(height: 16),
+          SliderBanner(sliders: _sliders),
+          const SizedBox(height: 20),
+          const SectionTitle(title: 'Best Seller'),
+          const SizedBox(height: 12),
+          ProductGrid(products: _bestSellers, shrinkWrap: true),
+          const SizedBox(height: 20),
+          const SectionTitle(title: 'Top Rated'),
+          const SizedBox(height: 12),
+          ProductGrid(products: _topRated, shrinkWrap: true),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/app_colors.dart';
+import '../data/models/onboarding_item.dart';
 import 'get_started_view.dart';
+import 'widgets/onboarding_page.dart';
+import 'widgets/page_indicator.dart';
 
+/// 3 intro pages with Skip / Prev / Next.
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
 
@@ -11,25 +15,32 @@ class OnboardingView extends StatefulWidget {
 
 class _OnboardingViewState extends State<OnboardingView> {
   final PageController _controller = PageController();
+  final List<OnboardingItem> _pages = OnboardingItem.pages;
   int _currentPage = 0;
 
-  final List<Map<String, String>> _pages = const [
-    {
-      'title': 'Choose Products',
-      'desc': 'Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit.',
-      'icon': 'shop',
-    },
-    {
-      'title': 'Make Payment',
-      'desc': 'Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit.',
-      'icon': 'payment',
-    },
-    {
-      'title': 'Get Your Order',
-      'desc': 'Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit.',
-      'icon': 'delivery',
-    },
-  ];
+  bool get _isLastPage => _currentPage == _pages.length - 1;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _goToGetStarted() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const GetStartedView()),
+    );
+  }
+
+  void _next() {
+    if (_isLastPage) return _goToGetStarted();
+    _controller.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeIn);
+  }
+
+  void _previous() {
+    _controller.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeIn);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,49 +54,17 @@ class _OnboardingViewState extends State<OnboardingView> {
               Align(
                 alignment: Alignment.topRight,
                 child: TextButton(
-                  onPressed: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const GetStartedView()),
-                  ),
-                  child: const Text('Skip', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  onPressed: _goToGetStarted,
+                  child: const Text('Skip',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
               ),
               Expanded(
                 child: PageView.builder(
                   controller: _controller,
-                  onPageChanged: (index) => setState(() => _currentPage = index),
                   itemCount: _pages.length,
-                  itemBuilder: (context, index) {
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircleAvatar(
-                          radius: 100,
-                          backgroundColor: Colors.pink.shade50,
-                          child: Icon(
-                            index == 0
-                                ? Icons.shopping_bag_outlined
-                                : index == 1
-                                    ? Icons.credit_card_outlined
-                                    : Icons.local_shipping_outlined,
-                            size: 80,
-                            color: AppColors.primaryPink,
-                          ),
-                        ),
-                        const SizedBox(height: 36),
-                        Text(
-                          _pages[index]['title']!,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _pages[index]['desc']!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5),
-                        ),
-                      ],
-                    );
-                  },
+                  onPageChanged: (index) => setState(() => _currentPage = index),
+                  itemBuilder: (_, index) => OnboardingPage(item: _pages[index]),
                 ),
               ),
               Row(
@@ -93,44 +72,17 @@ class _OnboardingViewState extends State<OnboardingView> {
                 children: [
                   _currentPage > 0
                       ? TextButton(
-                          onPressed: () => _controller.previousPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeIn,
-                          ),
+                          onPressed: _previous,
                           child: const Text('Prev', style: TextStyle(color: AppColors.textMuted)),
                         )
-                      : const SizedBox(width: 48),
-                  Row(
-                    children: List.generate(
-                      _pages.length,
-                      (index) => Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentPage == index ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index ? AppColors.textBlack : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ),
+                      : const SizedBox(width: 64),
+                  PageIndicator(count: _pages.length, currentIndex: _currentPage),
                   TextButton(
-                    onPressed: () {
-                      if (_currentPage == _pages.length - 1) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const GetStartedView()),
-                        );
-                      } else {
-                        _controller.nextPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeIn,
-                        );
-                      }
-                    },
+                    onPressed: _next,
                     child: Text(
-                      _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
-                      style: const TextStyle(color: AppColors.primaryPink, fontWeight: FontWeight.bold),
+                      _isLastPage ? 'Get Started' : 'Next',
+                      style: const TextStyle(
+                          color: AppColors.primaryPink, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
